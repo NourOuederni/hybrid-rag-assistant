@@ -1,0 +1,14 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        WITH_ML: "1"
+    ports: ["8000:8000"]
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - lumen-data:/data
+volumes:
+  lumen-data:

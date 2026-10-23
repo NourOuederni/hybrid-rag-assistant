@@ -1,0 +1,43 @@
+{
+  "sample": true,
+  "generated_at": null,
+  "configs": [
+    "RAG",
+    "GraphRAG",
+    "Hybrid agent"
+  ],
+  "metrics": [
+    "faithfulness",
+    "answer_relevancy",
+    "contextual_precision",
+    "contextual_recall",
+    "hallucination"
+  ],
+  "scores": {
+    "RAG": {
+      "faithfulness": 0.8,
+      "answer_relevancy": 0.78,
+      "contextual_precision": 0.7,
+      "contextual_recall": 0.72,
+      "hallucination": 0.15
+    },
+    "GraphRAG": {
+      "faithfulness": 0.82,
+      "answer_relevancy": 0.8,
+      "contextual_precision": 0.66,
+      "contextual_recall": 0.79,
+      "hallucination": 0.13
+    },
+    "Hybrid agent": {
+      "faithfulness": 0.88,
+      "answer_relevancy": 0.86,
+      "contextual_precision": 0.74,
+      "contextual_recall": 0.82,
+      "hallucination": 0.08
+    }
+  },
+  "route_stats": {
+    "placeholder": "numbers only"
+  },
+  "questions": []
+}

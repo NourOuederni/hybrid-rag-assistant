@@ -1,0 +1,2 @@
+# Real semantic embeddings and CLIP image search (downloads models on first use, ~500 MB with torch)
+sentence-transformers>=3.0

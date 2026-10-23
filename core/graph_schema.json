@@ -1,0 +1,4 @@
+{
+  "entity_types": ["Concept", "Method", "Model", "Dataset", "Metric", "Person", "Organization", "Tool"],
+  "relation_types": ["uses", "improves_on", "evaluated_on", "introduced_by", "part_of", "measured_by", "related_to", "compared_with"]
+}

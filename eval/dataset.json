@@ -1,0 +1,22 @@
+[
+  {"id": "q1", "category": "factual", "question": "What dataset was BERT pretrained on?",
+   "expected": "BERT was pretrained with masked language modelling on the BooksCorpus and English Wikipedia datasets.", "docs": ["transformers_overview"]},
+  {"id": "q2", "category": "factual", "question": "Which complexity does self-attention have in the number of tokens?",
+   "expected": "Self-attention has quadratic complexity in the number of tokens.", "docs": ["transformers_overview"]},
+  {"id": "q3", "category": "factual", "question": "What is GPT trained to do?",
+   "expected": "GPT is a decoder-only Transformer trained with next-token prediction.", "docs": ["transformers_overview"]},
+  {"id": "q4", "category": "factual", "question": "How does a typical RAG pipeline store document chunks?",
+   "expected": "Chunks are embedded with an embedding model and the vectors are stored in a vector database.", "docs": ["retrieval_augmented_generation"]},
+  {"id": "q5", "category": "multi_hop", "question": "What does GraphRAG add to RAG and which questions does it help with?",
+   "expected": "GraphRAG adds a knowledge graph with entities as nodes and relations as edges, which helps answer multi-hop questions.", "docs": ["retrieval_augmented_generation"]},
+  {"id": "q6", "category": "multi_hop", "question": "Which model was evaluated on LAMBADA and what kind of Transformer is it?",
+   "expected": "GPT, a decoder-only Transformer, was evaluated on LAMBADA.", "docs": ["transformers_overview"]},
+  {"id": "q7", "category": "image", "question": "Show me the diagram of the CLIP shared embedding space",
+   "expected": "Figure 1 of the CLIP document shows the image encoder and text encoder aligned in one shared embedding space.", "docs": ["clip_and_multimodal"]},
+  {"id": "q8", "category": "image", "question": "Find the figure with the standard RAG pipeline",
+   "expected": "Figure 1 of the RAG document shows the pipeline from question to cited answer.", "docs": ["retrieval_augmented_generation"]},
+  {"id": "q9", "category": "factual", "question": "How many image-text pairs was CLIP trained on?",
+   "expected": "CLIP was trained on 400 million image-text pairs.", "docs": ["clip_and_multimodal"]},
+  {"id": "q10", "category": "out_of_corpus", "question": "What is the capital of Tunisia?",
+   "expected": "Tunis is the capital of Tunisia.", "docs": []}
+]
