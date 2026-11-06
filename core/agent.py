@@ -34,6 +34,7 @@ SYSTEM = ("You are a careful research assistant. Answer ONLY from the numbered s
           "Cite every claim with its source number like [1] or [1][2]. "
           "Prefer sources from the user's own documents; when a claim relies on a web source, say 'According to web sources'. "
           "If the sources do not contain the answer, say so plainly instead of guessing. "
+          "Never write markdown images or links; figures are displayed automatically. "
           "Be concise and answer in the language of the question.")
 
 
