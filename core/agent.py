@@ -30,12 +30,20 @@ log = logging.getLogger("core.agent")
 IMAGE_RX = re.compile(r"\b(figure|fig\.|diagram|chart|image|picture|photo|illustration|plot|architecture|schema|screenshot)\b", re.I)
 FOLLOWUP_RX = re.compile(r"\b(it|its|they|them|their|this|that|those|these|he|she|him|her|also|too|same|above)\b", re.I)
 
+# Sentinel the generator must emit when the numbered sources do not answer the question.  It is
+# never shown to the user: the agent reacts to it (web fallback, or a plain "not found" message).
+NOT_FOUND = "[[NOT_IN_SOURCES]]"
+
 SYSTEM = ("You are a careful research assistant. Answer ONLY from the numbered sources. "
           "Cite every claim with its source number like [1] or [1][2]. "
           "Prefer sources from the user's own documents; when a claim relies on a web source, say 'According to web sources'. "
-          "If the sources do not contain the answer, say so plainly instead of guessing. "
+          f"If the sources do not contain the information needed to answer, reply with exactly {NOT_FOUND} "
+          "and nothing else (do not apologise, do not explain). "
           "Never write markdown images or links; figures are displayed automatically. "
           "Be concise and answer in the language of the question.")
+
+NOT_FOUND_MSG = ("I could not find this in the uploaded documents"
+                 "{web}.")
 
 
 class State(TypedDict, total=False):
@@ -57,6 +65,8 @@ class State(TypedDict, total=False):
     feedback: str
     loops: int
     retry: bool
+    not_found: bool      # generator reported that the sources do not answer the question
+    web_tried: bool      # the web node already ran for this question
     route: Annotated[list[str], operator.add]
 
 
@@ -169,15 +179,22 @@ class Agent:
 
     def n_web(self, st: State) -> dict:
         w = get_stream_writer()
+        out = {"web": [], "web_tried": True, "route": ["web_search"]}
         if not st["options"].web_search_enabled:
             w(event("route", node="web_search", detail="skipped: web search disabled"))
-            return {"web": [], "route": ["web_search"]}
+            return out
         if not web_enabled():
             w(event("route", node="web_search", detail="skipped: not configured"))
-            return {"web": [], "route": ["web_search"]}
+            return out
+        why = "the model found no answer in the documents" if st.get("not_found") else "local context insufficient"
         results, err = web_search(st["standalone"])
-        w(event("route", node="web_search", detail=f"{len(results)} result(s)" + (f" (error: {err})" if err else "")))
-        return {"web": results, "route": ["web_search"]}
+        w(event("route", node="web_search", detail=f"{len(results)} result(s) ({why})" + (f" (error: {err})" if err else "")))
+        out["web"] = results
+        return out
+
+    def _can_fallback(self, st: State) -> bool:
+        """True when a web search could still be tried for this question."""
+        return (not st.get("web_tried")) and st["options"].web_search_enabled and web_enabled()
 
     def n_generate(self, st: State) -> dict:
         w = get_stream_writer()
@@ -189,7 +206,8 @@ class Agent:
             ctx += st.get("images", [])[:2]
         ctx += st.get("web", [])  # local first, web last (A6.9)
         ctx = ctx[:10]
-        reset = st.get("loops", 0) > 0
+        # a second generation (verify retry, or web fallback after a first attempt) replaces the streamed text
+        reset = st.get("loops", 0) > 0 or bool(st.get("not_found"))
         text = ""
         if st["qtype"] == "chat":
             for t in self.llm.stream(st["question"], system="You are a friendly assistant for a document research "
@@ -197,24 +215,58 @@ class Agent:
                 text += t
                 w(event("token", text=t, reset=reset))
                 reset = False
-        else:
-            blocks = []
-            for i, s in enumerate(ctx, 1):
-                blocks.append(f"[{i}] ({_label(s)})\n{s.snippet.strip()}\n")
-            fb = f"REVIEWER FEEDBACK (fix these problems): {st['feedback']}\n\n" if st.get("feedback") else ""
-            prompt = ("SOURCES:\n" + ("\n".join(blocks) if blocks else "(none)") + "\n\n" + fb +
-                      "QUESTION: " + st["standalone"])
-            for t in self.llm.stream(prompt, system=SYSTEM, task="generate", max_tokens=1500):
-                text += t
-                w(event("token", text=t, reset=reset))
-                reset = False
+            w(event("route", node="generate", detail="chat"))
+            return {"text": text, "context": ctx, "route": ["generate"]}
+
+        if not ctx and self._can_fallback(st):
+            # nothing to answer from: go straight to the web instead of asking the model about nothing
+            w(event("route", node="generate", detail="no local sources, trying the web"))
+            return {"text": "", "context": [], "not_found": True, "route": ["generate"]}
+
+        blocks = []
+        for i, s in enumerate(ctx, 1):
+            blocks.append(f"[{i}] ({_label(s)})\n{s.snippet.strip()}\n")
+        fb = f"REVIEWER FEEDBACK (fix these problems): {st['feedback']}\n\n" if st.get("feedback") else ""
+        prompt = ("SOURCES:\n" + ("\n".join(blocks) if blocks else "(none)") + "\n\n" + fb +
+                  "QUESTION: " + st["standalone"])
+        # Tokens are held back until it is clear the model is not answering with the NOT_FOUND sentinel,
+        # so the sentinel never flashes in the UI.
+        pending, decided = "", False
+        for t in self.llm.stream(prompt, system=SYSTEM, task="generate", max_tokens=1500):
+            text += t
+            if decided:
+                w(event("token", text=t, reset=False))
+                continue
+            pending += t
+            head = pending.lstrip()
+            if NOT_FOUND.startswith(head[:len(NOT_FOUND)]) and len(head) < len(NOT_FOUND):
+                continue  # still could become the sentinel
+            if head.startswith(NOT_FOUND):
+                break  # sentinel received: stop generating, decide below
+            decided = True
+            w(event("token", text=pending, reset=reset))
+            reset = False
+
+        if text.strip().startswith(NOT_FOUND) or (not ctx and not decided):
+            if self._can_fallback(st):
+                w(event("route", node="generate", detail="answer not in the documents, trying the web"))
+                return {"text": "", "context": ctx, "not_found": True, "route": ["generate"]}
+            searched_web = bool(st.get("web_tried")) and st["options"].web_search_enabled and web_enabled()
+            msg = NOT_FOUND_MSG.format(web=" or on the web" if searched_web else "")
+            w(event("token", text=msg, reset=True))
+            w(event("route", node="generate", detail="answer not in the sources"))
+            return {"text": msg, "context": [], "not_found": False, "route": ["generate"]}
+        if not decided:  # whole answer was shorter than the sentinel: flush it
+            w(event("token", text=pending, reset=reset))
         w(event("route", node="generate", detail=f"{len(ctx)} source(s) in context"))
-        return {"text": text, "context": ctx, "route": ["generate"]}
+        return {"text": text, "context": ctx, "not_found": False, "route": ["generate"]}
 
     def n_verify(self, st: State) -> dict:
         w = get_stream_writer()
         loops = st.get("loops", 0)
         if not st.get("context") or st["qtype"] == "chat" or loops >= settings.MAX_VERIFY_LOOPS:
+            return {"retry": False}
+        if not st.get("text") or st["text"].startswith("I could not find"):
             return {"retry": False}
         blocks = "\n".join(f"[{i}] {s.snippet[:600]}" for i, s in enumerate(st["context"], 1))
         try:
@@ -252,7 +304,9 @@ class Agent:
         g.add_conditional_edges("grade", lambda s: "generate" if s["sufficient"] else "web",
                                 {"generate": "generate", "web": "web"})
         g.add_edge("web", "generate")
-        g.add_edge("generate", "verify")
+        # the generator can report that the sources do not answer: try the web once, then generate again
+        g.add_conditional_edges("generate", lambda s: "web" if s.get("not_found") else "verify",
+                                {"web": "web", "verify": "verify"})
         g.add_conditional_edges("verify", lambda s: "generate" if s.get("retry") else "finalize",
                                 {"generate": "generate", "finalize": "finalize"})
         g.add_edge("finalize", END)

@@ -103,3 +103,29 @@ def test_web_failure_does_not_crash(core, monkeypatch):
     monkeypatch.setattr(agent, "web_search", lambda q: ([], "network down"))
     ans = core.ask("What is the capital of France?")
     assert "web_search" in ans.route_taken and not ans.used_web
+
+
+def test_model_not_found_triggers_web_fallback(core, monkeypatch):
+    """Grader says the local passages look relevant, but the model cannot answer from them:
+    the agent must still fall back to the web and answer from it."""
+    import core.agent as agent
+    from contracts.schemas import SourceRecord
+    web = [SourceRecord(id="web:1", source_type="web", url="https://example.org/cyber", title="Cybersecurity",
+                        snippet="Cybersecurity is the practice of protecting systems, networks and data from attacks.",
+                        score=0.9)]
+    monkeypatch.setattr(agent, "web_enabled", lambda: True)
+    monkeypatch.setattr(agent, "web_search", lambda q: (web, None))
+    # force the grader to accept whatever local passages came back
+    monkeypatch.setattr(agent.Agent, "n_grade", lambda self, st: {"sufficient": True, "route": ["grade"]})
+    ans = core.ask("Define cybersecurity attacks protecting networks")
+    assert "web_search" in ans.route_taken and ans.used_web
+    assert ans.sources and ans.sources[0].source_type == "web"
+    assert "[[NOT_IN_SOURCES]]" not in ans.text
+
+
+def test_sentinel_never_streamed(core, monkeypatch):
+    import core.agent as agent
+    monkeypatch.setattr(agent, "web_enabled", lambda: False)
+    toks = "".join(e["data"].get("text", "") for e in core.chat("What is the capital of France?", [], ChatOptions())
+                   if e["event"] == "token")
+    assert "NOT_IN_SOURCES" not in toks and "could not find" in toks

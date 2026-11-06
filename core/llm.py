@@ -142,7 +142,7 @@ class FakeLLM(LLM):
         question = prompt.split("QUESTION:")[-1].strip()
         blocks = re.findall(r"^\[(\d+)\][^\n]*\n(.*?)(?=^\[\d+\]|^QUESTION:|\Z)", prompt, flags=re.S | re.M)
         if not blocks:
-            yield "I could not find this in the uploaded documents, and no web results were available."
+            yield "[[NOT_IN_SOURCES]]"  # same sentinel as core.agent.NOT_FOUND: the agent decides what to do
             return
         q = Counter(_tokens(question))
         scored = []
@@ -152,7 +152,10 @@ class FakeLLM(LLM):
                 if s:
                     scored.append((s, int(n), sent.strip()))
         scored.sort(key=lambda x: -x[0])
-        picked = scored[:3] or [(0, int(blocks[0][0]), blocks[0][1].strip().split("\n")[0])]
+        if not scored:  # no passage shares a single keyword with the question
+            yield "[[NOT_IN_SOURCES]]"
+            return
+        picked = scored[:3]
         out = "Based on the available sources: " + " ".join(f"{s} [{n}]" for _, n, s in picked)
         for w in out.split(" "):
             yield w + " "
