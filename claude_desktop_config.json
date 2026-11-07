@@ -1,0 +1,12 @@
+   {
+     "mcpServers": {
+       "lumen": {
+         "command": "C:/Users/YOU/hybrid-rag-assistant/.venv/Scripts/python.exe",
+         "args": ["-m", "core.mcp_server"],
+         "env": {
+           "PYTHONPATH": "C:/Users/YOU/hybrid-rag-assistant",
+           "DATA_DIR": "C:/Users/YOU/hybrid-rag-assistant/data"
+         }
+       }
+     }
+   }

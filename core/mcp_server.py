@@ -75,7 +75,11 @@ def ask_agent(question: str, mode: str = "auto", web_search_enabled: bool = True
 
 def main() -> None:
     if "--http" in sys.argv:
-        mcp.run(transport="streamable-http")
+        try:
+            mcp.run(transport="streamable-http", host="127.0.0.1", port=8765)   # mcp 2.x
+        except TypeError:
+            mcp.settings.port = 8765                                            # mcp 1.x
+            mcp.run(transport="streamable-http")
     else:
         mcp.run(transport="stdio")
 
