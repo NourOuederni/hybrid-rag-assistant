@@ -14,6 +14,7 @@ def build_answer(text: str, context: list[SourceRecord], route: list[str], used_
     - markers that do not exist are removed (A7.2)
     - remaining markers are renumbered by first appearance, with a stable mapping to sources
     """
+    text = text.replace("【", "[").replace("】", "]")
     order: dict[int, int] = {}
 
     def repl(m: re.Match) -> str:
